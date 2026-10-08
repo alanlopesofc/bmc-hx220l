@@ -61,17 +61,21 @@ const frameAt = (t) => Math.min(VIDEO.frames - 1, Math.max(0, Math.round(t * VID
  * ---------------------------------------------------------------- */
 function buildCard(ch, i) {
   const el = document.createElement('article');
-  el.className = `spec spec--${ch.side}${ch.range ? ' spec--range' : ''}`;
+  el.className = `spec spec--${ch.side}${ch.place === 'bottom' ? ' spec--bottom' : ''}`;
   el.dataset.id = ch.id;
-  const value = ch.range
-    ? `<span class="spec__num" data-n="0">${formatNumber(ch.range[0], ch.decimals)}</span><span class="spec__dash">–</span><span class="spec__num" data-n="1">${formatNumber(ch.range[1], ch.decimals)}</span>`
-    : `<span class="spec__num" data-n="0">${formatNumber(ch.value, ch.decimals)}</span>`;
+  const pr = ch.proof;
+  const proof = !pr ? '' : `
+      <p class="spec__proof">
+        <span class="spec__value">${pr.range
+          ? `<span class="spec__num">${formatNumber(pr.range[0], pr.decimals)}</span><span class="spec__dash">–</span><span class="spec__num">${formatNumber(pr.range[1], pr.decimals)}</span>`
+          : `<span class="spec__num">${formatNumber(pr.value, pr.decimals)}</span>`}<span class="spec__unit">${pr.unit}</span></span>
+        <span class="spec__caption">${pr.caption}</span>
+      </p>`;
   el.innerHTML = `
     <div class="spec__inner">
-      <p class="spec__index">${String(i + 1).padStart(2, '0')}<span>/${String(CHAPTERS.length).padStart(2, '0')}</span></p>
-      <h3 class="spec__label">${ch.label}</h3>
-      <p class="spec__value">${value}<span class="spec__unit">${ch.unit}</span></p>
-      <p class="spec__note">${ch.note}</p>
+      <p class="spec__index">${String(i + 1).padStart(2, '0')}<span>/${String(CHAPTERS.length).padStart(2, '0')}</span> ${ch.rail}</p>
+      <h3 class="spec__title">${ch.title}</h3>
+      <ul class="spec__bullets">${ch.bullets.map((b) => `<li>${b}</li>`).join('')}</ul>${proof}
     </div>`;
   return el;
 }
@@ -345,22 +349,22 @@ function initExperience() {
     cards.forEach(({ ch, el, nums, line }) => {
       const dir = ch.side === 'right' ? 1 : -1;
       const inner = el.querySelector('.spec__inner');
-      const rows = inner.children;
+      const rows = inner.querySelectorAll('.spec__index, .spec__title, li, .spec__proof');
       tl.fromTo(el, { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.15 }, ch.at)
         .fromTo(inner,
           { z: -320, rotateY: dir * 28, xPercent: dir * 12 },
           { z: 0, rotateY: dir * 8, xPercent: 0, duration: 0.7, ease: 'power3.out' }, ch.at)
-        .from(rows, { y: 18, autoAlpha: 0, duration: 0.45, stagger: 0.08, ease: 'power2.out' }, ch.at + 0.1)
+        .from(rows, { y: 16, autoAlpha: 0, duration: 0.4, stagger: 0.07, ease: 'power2.out' }, ch.at + 0.1)
         .to(line, { p: 1, duration: 0.6, ease: 'power2.inOut' }, ch.at + 0.15);
 
       // Contagem precisa até o valor oficial
-      const targets = ch.range ?? [ch.value];
+      const targets = ch.proof ? ch.proof.range ?? [ch.proof.value] : [];
       targets.forEach((v, k) => {
         const o = { v: 0 };
         tl.to(o, {
-          v, duration: 0.5, ease: 'power3.out',
-          onUpdate: () => { nums[k].textContent = formatNumber(o.v, ch.decimals); },
-        }, ch.at + 0.1);
+          v, duration: 0.6, ease: 'power3.out',
+          onUpdate: () => { nums[k].textContent = formatNumber(o.v, ch.proof.decimals); },
+        }, ch.at + 0.25);
       });
 
       // Saída: o cartão passa pela câmera.
