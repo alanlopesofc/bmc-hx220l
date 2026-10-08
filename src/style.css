@@ -134,12 +134,12 @@ p { margin: 0; }
 .spec__inner {
   position: relative;
   padding: 22px 26px 24px;
-  background: rgba(11, 22, 64, 0.46);
+  /* Sem backdrop-filter: o desfoque seria refeito a cada quadro do vídeo e pesa no scroll. */
+  background: linear-gradient(160deg, rgba(11, 22, 64, 0.82), rgba(11, 22, 64, 0.66));
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-top: 2px solid var(--blue-light);
   border-radius: 4px;
-  backdrop-filter: blur(14px) saturate(1.2);
-  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  box-shadow: 0 24px 60px -30px rgba(0, 0, 0, 0.6);
   transform-style: preserve-3d;
   will-change: transform, opacity;
 }

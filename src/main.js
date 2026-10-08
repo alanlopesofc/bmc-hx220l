@@ -127,6 +127,7 @@ function initExperience() {
     path: FRAME_SETS[set],
     step: saveData || (lightweight && set === 'd') ? 2 : 1,
     concurrency: lightweight ? 4 : 6,
+    maxDecoded: lightweight ? 30 : 90,
     onProgress: (p) => {
       gsap.set(els.loaderBar, { scaleX: p });
       if (p >= 1) gsap.to(els.loader, { autoAlpha: 0, duration: 0.6, delay: 0.2 });
@@ -148,10 +149,28 @@ function initExperience() {
 
   // Three.js em chunk separado: pôster e título aparecem antes do WebGL.
   let renderer = null;
+  let canvas = els.canvas;
   let destroyed = false;
   import('./renderer.js').then(({ createRenderer }) => {
     if (destroyed) return;
-    renderer = createRenderer(els.canvas, { tint: NAVY_DEEP });
+    const preferCanvas = window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 768;
+    renderer = createRenderer(canvas, {
+      tint: NAVY_DEEP,
+      forceCanvas: preferCanvas,
+      onContextLost: () => {
+        if (destroyed || renderer?.kind !== 'webgl') return;
+        const oldCanvas = canvas;
+        const nextCanvas = oldCanvas.cloneNode(false);
+        oldCanvas.replaceWith(nextCanvas);
+        renderer.destroy();
+        canvas = nextCanvas;
+        els.canvas = nextCanvas;
+        renderer = createRenderer(canvas, { tint: NAVY_DEEP, forceCanvas: true });
+        renderer.resize(view.w, view.h, view.dpr);
+        hero.dataset.renderer = renderer.kind;
+        draw.dirty = true;
+      },
+    });
     hero.dataset.renderer = renderer.kind;
     renderer.resize(view.w, view.h, view.dpr);
     draw.dirty = true;
@@ -173,7 +192,7 @@ function initExperience() {
     const g = document.createElementNS(svgNS, 'g');
     g.innerHTML = '<path class="line__path" pathLength="1"/><circle class="line__ring" r="14"/><circle class="line__dot" r="4"/>';
     els.lines.appendChild(g);
-    return { ch, el, nums, g, path: g.firstChild, ring: g.children[1], dot: g.children[2], line: { p: 0 } };
+    return { ch, el, inner: el.querySelector('.spec__inner'), nums, g, path: g.firstChild, ring: g.children[1], dot: g.children[2], line: { p: 0 } };
   });
 
   // Trilho de capítulos
@@ -198,8 +217,13 @@ function initExperience() {
   };
   const ro = new ResizeObserver(resize);
   ro.observe(els.stage);
+  const onViewportResize = () => requestAnimationFrame(resize);
+  window.visualViewport?.addEventListener('resize', onViewportResize, { passive: true });
   resize();
-  cleanups.push(() => ro.disconnect());
+  cleanups.push(() => {
+    ro.disconnect();
+    window.visualViewport?.removeEventListener('resize', onViewportResize);
+  });
 
   // Profundidade guiada pelo cursor (apenas ponteiro fino).
   if (window.matchMedia('(pointer: fine)').matches) {
@@ -221,18 +245,26 @@ function initExperience() {
     const moving = Math.abs(pointer.sx - psx) + Math.abs(pointer.sy - psy) > 0.0004;
 
     const t = state.time;
-    const frame = frameAt(t);
     const si = shotAt(t);
     const shot = SHOTS[si];
     if (si !== draw.shot) {
       if (draw.shot !== -1) draw.cut = 1;
       draw.shot = si;
     }
-    const img = store.get(frame, frameAt(shot.start), frameAt(shot.end) - 1) ?? draw.img;
+    // Crossfade entre quadros vizinhos do mesmo plano: 15 fps passam a fluir
+    // como movimento contínuo, sem degraus. Nunca mistura através de um corte.
+    const lo = frameAt(shot.start), hi = frameAt(shot.end) - 1;
+    const exact = Math.min(hi, Math.max(lo, t * VIDEO.fps));
+    const frame = Math.floor(exact);
+    const img = store.get(frame, lo, hi) ?? draw.img;
+    const next = frame < hi ? store.peek(frame + 1) : null;
+    const mix = next ? Math.round((exact - frame) * 16) / 16 : 0;
     const local = Math.min(1, Math.max(0, (t - shot.start) / (shot.end - shot.start)));
 
     // O conjunto vertical já vem enquadrado; nos outros, o foco segue o assunto do plano.
-    const framed = img && img.naturalWidth < img.naturalHeight;
+    const imgWidth = img && (img.width || img.naturalWidth);
+    const imgHeight = img && (img.height || img.naturalHeight);
+    const framed = img && imgWidth < imgHeight;
     renderState.focus = framed || view.w / view.h >= 1.2 ? 0.5 : shot.focus;
     renderState.zoom = 1.05 + local * 0.045;
     renderState.cut = draw.cut;
@@ -241,25 +273,27 @@ function initExperience() {
     renderState.px = pointer.sx * 0.006;
     renderState.py = pointer.sy * 0.004;
 
-    const changed = frame !== draw.frame || draw.cut > 0.01 || moving || draw.dirty || img !== draw.img;
+    const key = frame + mix;
+    const changed = key !== draw.frame || draw.cut > 0.01 || moving || draw.dirty || img !== draw.img;
     if (renderer && img && changed) {
-      renderer.draw(img, renderState);
+      renderer.draw(img, renderState, next, mix);
       if (draw.frame === -1) els.poster.classList.add('is-hidden');
-      draw.frame = frame;
+      draw.frame = key;
       draw.img = img;
       draw.dirty = false;
     }
     draw.cut *= 0.86;
     if (draw.cut < 0.01) draw.cut = 0;
 
+    // Primeiro as leituras de layout (linhas), depois as escritas: evita layout forçado.
+    updateLines(renderState);
+    updateRail(t);
+
     // Camadas de interface em outro plano: deslocam ao contrário do quadro.
     if (moving) {
       gsap.set(els.specs, { x: -pointer.sx * 14, y: -pointer.sy * 10, rotateY: pointer.sx * 3, rotateX: -pointer.sy * 2 });
       gsap.set(els.title, { x: -pointer.sx * 8, y: -pointer.sy * 6 });
     }
-
-    updateLines(renderState);
-    updateRail(t);
   };
 
   const updateLines = (s) => {
@@ -269,10 +303,10 @@ function initExperience() {
       c.g.style.display = visible ? '' : 'none';
       if (!visible) continue;
       const a = projectAnchor(anchor, view, s);
-      const r = c.el.querySelector('.spec__inner').getBoundingClientRect();
-      const sr = els.stage.getBoundingClientRect();
-      const cx = (c.ch.side === 'right' ? r.left : r.right) - sr.left;
-      const cy = r.top - sr.top + 28;
+      const r = c.inner.getBoundingClientRect();
+      // As linhas só aparecem com a cena fixada no topo (0,0): coordenadas da viewport bastam.
+      const cx = c.ch.side === 'right' ? r.left : r.right;
+      const cy = r.top + 28;
       const elbowX = a.x + (cx - a.x) * 0.45;
       c.path.setAttribute('d', `M${a.x},${a.y} L${elbowX},${cy} L${cx},${cy}`);
       c.path.style.strokeDashoffset = String(1 - c.line.p);
@@ -322,7 +356,7 @@ function initExperience() {
         start: 'top top',
         end: () => `+=${window.innerHeight * TOTAL * (desktop ? 0.46 : 0.36)}`,
         pin: els.stage,
-        scrub: 0.6,
+        scrub: desktop ? true : 0.35,
         anticipatePin: 1,
         invalidateOnRefresh: true,
       },
@@ -338,7 +372,7 @@ function initExperience() {
       .to(els.rail, { autoAlpha: 0, duration: 0.4 }, OUTRO_AT - 0.3);
     tl.to(els.hint, { autoAlpha: 0, y: 10, duration: 0.4 }, 0)
       .to(els.title, { autoAlpha: 0, z: -220, yPercent: -18, duration: 1.5, ease: 'power2.in' }, 0.25)
-      .to(els.titleWord, { letterSpacing: '0.06em', duration: 1.5, ease: 'power1.in' }, 0.25);
+      .to(els.titleWord, { scaleX: 1.06, transformOrigin: '0% 100%', duration: 1.5, ease: 'power1.in' }, 0.25);
 
     // Fases 03/04: cada dado entra no momento do vídeo que o demonstra.
     cards.forEach(({ ch, el, nums, line }) => {
