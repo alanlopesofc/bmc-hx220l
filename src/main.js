@@ -20,16 +20,11 @@ const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').match
 const saveData = navigator.connection?.saveData === true;
 const lightweight = window.matchMedia('(max-width: 767px)').matches || saveData;
 
-// Três conjuntos de frames:
-//   d — 1344×756, desktop;
-//   p — 600×800, recorte vertical já centrado na máquina em cada plano (celular/tablet em pé);
-//   m — 854×480, telas pequenas na horizontal.
-const FRAME_SETS = { d: 'frames/d/', p: 'frames/p/', m: 'frames/m/' };
-function pickFrameSet() {
-  const portrait = window.innerWidth / window.innerHeight < 0.9;
-  if (portrait) return 'p';
-  return lightweight ? 'm' : 'd';
-}
+// Dois conjuntos de frames:
+//   d — 1344×756, telas na horizontal (celular deitado carrega 1 a cada 2);
+//   p — 600×800, recorte vertical já centrado na máquina em cada plano (celular/tablet em pé).
+const FRAME_SETS = { d: 'frames/d/', p: 'frames/p/' };
+const pickFrameSet = () => (window.innerWidth / window.innerHeight < 0.9 ? 'p' : 'd');
 
 const hero = $('[data-hero]');
 const els = {
@@ -130,7 +125,7 @@ function initExperience() {
   const makeStore = (set) => new FrameStore({
     count: VIDEO.frames,
     path: FRAME_SETS[set],
-    step: saveData ? 2 : 1,
+    step: saveData || (lightweight && set === 'd') ? 2 : 1,
     concurrency: lightweight ? 4 : 6,
     onProgress: (p) => {
       gsap.set(els.loaderBar, { scaleX: p });

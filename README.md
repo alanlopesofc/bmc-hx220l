@@ -10,7 +10,7 @@ npm run build    # dist/ estático (pode ir para qualquer host ou ser embutido n
 
 ## Arquitetura
 - `src/story.js` — mapa de eventos do vídeo (cortes medidos com ffmpeg `scdet`), capítulos, dados técnicos e âncoras na máquina.
-- `src/frames.js` — sequência WebP com carregamento progressivo (passes 1/16 → 1/1). Mobile/saveData usa 854 px e metade dos frames.
+- `src/frames.js` — sequência WebP com carregamento progressivo (passes 1/16 → 1/1). Telas em pé usam `frames/p` (600×800, recorte vertical enquadrado por plano); celular deitado e saveData carregam metade dos frames.
 - `src/renderer.js` — Three.js (chunk carregado depois do pôster): cover com foco por plano, push-in, parallax do cursor, aberração cromática nos cortes, grão, vinheta e fusão para o azul da marca. Fallback Canvas 2D sem WebGL.
 - `src/main.js` — Lenis + ScrollTrigger (pin + scrub), timeline única em segundos de vídeo, cartões 3D com contagem, linhas de conexão, trilho de capítulos clicável, `gsap.matchMedia` por breakpoint, modo estático para `prefers-reduced-motion`.
 
@@ -18,9 +18,12 @@ npm run build    # dist/ estático (pode ir para qualquer host ou ser embutido n
 ```bash
 V=video.mp4
 ffmpeg -i $V -vf "fps=15,scale=1344:-2:flags=lanczos,hqdn3d=1.5:1.5:3:3" /tmp/d/f%03d.png   # cwebp -q 66
-ffmpeg -i $V -vf "fps=15,scale=854:-2:flags=lanczos" /tmp/m/f%03d.png                         # cwebp -q 62
+X="if(lt(t,2.113),0.47,if(lt(t,4.446),0.3,if(lt(t,6.246),0.36,if(lt(t,7.58),0.3,if(lt(t,8.513),0.62,if(lt(t,9.646),0.55,if(lt(t,11.613),0.62,if(lt(t,13.146),0.4,0.42))))))))"
+ffmpeg -i $V -vf "fps=15,crop=810:1080:'max(0,min(1110,($X)*1920-405))':0,scale=600:800:flags=lanczos,hqdn3d=1.5:1.5:3:3" /tmp/p/f%03d.png  # cwebp -q 60
 ```
 Se o vídeo mudar, refaça `SHOTS`/`CHAPTERS` em `story.js` (tempos e âncoras).
+
+Publicado em https://alanlopesofc.github.io/bmc-hx220l/ (branch `gh-pages` = conteúdo de `dist/`).
 
 ## Fontes dos dados
 Ficha oficial `PT_HX220L-T3.pdf`. O site atual mostra 22.796 kg; a ficha dá 22.720 kg (sapata 700 mm) — a página usa a ficha.
