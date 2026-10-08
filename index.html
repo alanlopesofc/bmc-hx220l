@@ -10,7 +10,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Montserrat:wght@500;600;700;800&display=swap" />
-  <link rel="preload" as="image" href="media/poster.webp" fetchpriority="high" />
+  <link rel="preload" as="image" href="media/poster.webp" media="(min-aspect-ratio: 9/10)" fetchpriority="high" />
+  <link rel="preload" as="image" href="media/poster-v.webp" media="(max-aspect-ratio: 9/10)" fetchpriority="high" />
 </head>
 <body>
   <a class="skip-link" href="#ficha">Pular a apresentação e ir para a ficha técnica</a>
@@ -31,7 +32,10 @@
     <section class="hero" id="hero" aria-label="Apresentação da escavadeira Hyundai HX220L" data-hero>
       <div class="hero__stage" data-stage>
         <div class="hero__media" data-media>
-          <img class="hero__poster" src="media/poster.webp" alt="" aria-hidden="true" data-poster />
+          <picture>
+            <source media="(max-aspect-ratio: 9/10)" srcset="media/poster-v.webp" />
+            <img class="hero__poster" src="media/poster.webp" alt="" aria-hidden="true" data-poster />
+          </picture>
           <canvas class="hero__canvas" data-canvas aria-hidden="true"></canvas>
           <div class="hero__scrim" aria-hidden="true"></div>
         </div>
@@ -70,8 +74,6 @@
         <div class="hero__loader" data-loader aria-hidden="true"><span data-loader-bar></span></div>
       </div>
 
-      <!-- Versão estática (prefers-reduced-motion) -->
-      <div class="hero__static" data-static hidden></div>
     </section>
 
     <!-- PRÓXIMA SEÇÃO -->

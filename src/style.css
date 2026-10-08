@@ -235,17 +235,6 @@ p { margin: 0; }
 .hero__loader { position: absolute; z-index: 7; left: 0; right: 0; bottom: 0; height: 2px; background: rgba(255, 255, 255, 0.08); }
 .hero__loader span { position: absolute; inset: 0; background: var(--blue-light); transform-origin: left; transform: scaleX(0); }
 
-/* ---------------- Movimento reduzido: capítulos estáticos ---------------- */
-.hero.is-static .hero__specs, .hero.is-static .hero__lines, .hero.is-static .hero__outro { display: none; }
-.hero__static { display: grid; gap: clamp(48px, 8vw, 96px); padding: clamp(64px, 10vw, 120px) var(--gutter); }
-.static-chapter { margin: 0; display: grid; gap: 24px; align-items: center; }
-.static-chapter img { width: 100%; border-radius: 4px; }
-.static-chapter .spec { position: static; width: auto; visibility: visible; }
-.static-chapter .spec__inner { backdrop-filter: none; background: transparent; border: 0; border-top: 2px solid var(--blue-light); padding: 20px 0 0; }
-@media (min-width: 900px) {
-  .static-chapter { grid-template-columns: 1.6fr 1fr; gap: 48px; }
-}
-
 /* ---------------- Ficha técnica (seção seguinte) ---------------- */
 .ficha { position: relative; background: var(--navy-deep); padding: clamp(96px, 14vw, 180px) 0 clamp(80px, 10vw, 140px); }
 .ficha:focus { outline: none; }

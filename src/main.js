@@ -16,15 +16,18 @@ const NAVY_DEEP = '#0b1640'; // #14298D escurecido: base do fechamento e da seç
 const END_HOLD = 2.2; // segundos de timeline após o fim do vídeo (fechamento + liberação do pin)
 const TOTAL = VIDEO.duration + END_HOLD;
 
-const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+// Com "Reduzir movimento" (ou Modo de Pouca Energia no iPhone) o vídeo continua
+// seguindo o scroll, porque é o próprio usuário que o move. Só saem os efeitos extras:
+// parallax do cursor, flash nos cortes, push-in e rotação 3D dos cartões.
+const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const saveData = navigator.connection?.saveData === true;
 const lightweight = window.matchMedia('(max-width: 767px)').matches || saveData;
 
 // Dois conjuntos de frames:
 //   d — 1344×756, telas na horizontal (celular deitado carrega 1 a cada 2);
-//   p — 600×800, recorte vertical já centrado na máquina em cada plano (celular/tablet em pé).
-const FRAME_SETS = { d: 'frames/d/', p: 'frames/p/' };
-const pickFrameSet = () => (window.innerWidth / window.innerHeight < 0.9 ? 'p' : 'd');
+//   v — 720×1280, extraído do vídeo vertical 1080×1920 (media-src/), recortado na máquina em cada plano.
+const FRAME_SETS = { d: 'frames/d/', v: 'frames/v/' };
+const pickFrameSet = () => (window.innerWidth / window.innerHeight < 0.9 ? 'v' : 'd');
 
 const hero = $('[data-hero]');
 const els = {
@@ -45,7 +48,6 @@ const els = {
   loader: $('[data-loader]'),
   loaderBar: $('[data-loader-bar]'),
   header: $('[data-header]'),
-  staticWrap: $('[data-static]'),
 };
 
 const frameUrl = (set, i) => `frames/${set}/f${String(i + 1).padStart(3, '0')}.webp`;
@@ -86,27 +88,6 @@ function buildRail(onSelect) {
 }
 
 /* ---------------------------------------------------------------- *
- * Modo de movimento reduzido: narrativa preservada, sem scrub/pin
- * ---------------------------------------------------------------- */
-function initStatic() {
-  hero.classList.add('is-static');
-  els.header.classList.add('is-solid');
-  els.staticWrap.hidden = false;
-  els.staticWrap.innerHTML = CHAPTERS.map((ch, i) => {
-    const t = (ch.at + ch.until) / 2;
-    return `<figure class="static-chapter">
-      <img src="${frameUrl('d', frameAt(t))}" alt="" loading="lazy" width="${VIDEO.width}" height="${VIDEO.height}" />
-      <figcaption></figcaption>
-    </figure>`;
-  }).join('');
-  els.staticWrap.querySelectorAll('figcaption').forEach((fc, i) => fc.appendChild(buildCard(CHAPTERS[i], i)));
-  els.loader.remove();
-  els.rail.remove();
-  els.hint.remove();
-  els.canvas.remove();
-}
-
-/* ---------------------------------------------------------------- *
  * Experiência completa
  * ---------------------------------------------------------------- */
 function initExperience() {
@@ -127,7 +108,7 @@ function initExperience() {
     path: FRAME_SETS[set],
     step: saveData || (lightweight && set === 'd') ? 2 : 1,
     concurrency: lightweight ? 4 : 6,
-    maxDecoded: lightweight ? 30 : 90,
+    maxDecoded: lightweight ? 20 : 90, // 720×1280 decodificado ≈ 3,7 MB: 20 cabem com folga no iPhone
     onProgress: (p) => {
       gsap.set(els.loaderBar, { scaleX: p });
       if (p >= 1) gsap.to(els.loader, { autoAlpha: 0, duration: 0.6, delay: 0.2 });
@@ -226,7 +207,7 @@ function initExperience() {
   });
 
   // Profundidade guiada pelo cursor (apenas ponteiro fino).
-  if (window.matchMedia('(pointer: fine)').matches) {
+  if (!calm && window.matchMedia('(pointer: fine)').matches) {
     const onMove = (e) => {
       pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
       pointer.y = (e.clientY / window.innerHeight) * 2 - 1;
@@ -248,7 +229,7 @@ function initExperience() {
     const si = shotAt(t);
     const shot = SHOTS[si];
     if (si !== draw.shot) {
-      if (draw.shot !== -1) draw.cut = 1;
+      if (draw.shot !== -1 && !calm) draw.cut = 1;
       draw.shot = si;
     }
     // Crossfade entre quadros vizinhos do mesmo plano: 15 fps passam a fluir
@@ -266,7 +247,7 @@ function initExperience() {
     const imgHeight = img && (img.height || img.naturalHeight);
     const framed = img && imgWidth < imgHeight;
     renderState.focus = framed || view.w / view.h >= 1.2 ? 0.5 : shot.focus;
-    renderState.zoom = 1.05 + local * 0.045;
+    renderState.zoom = calm ? 1.05 : 1.05 + local * 0.045;
     renderState.cut = draw.cut;
     renderState.time = time;
     renderState.fade = state.fade;
@@ -376,12 +357,12 @@ function initExperience() {
 
     // Fases 03/04: cada dado entra no momento do vídeo que o demonstra.
     cards.forEach(({ ch, el, nums, line }) => {
-      const dir = ch.side === 'right' ? 1 : -1;
+      const dir = calm ? 0 : ch.side === 'right' ? 1 : -1;
       const inner = el.querySelector('.spec__inner');
       const rows = inner.querySelectorAll('.spec__index, .spec__title, li, .spec__proof');
       tl.fromTo(el, { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.15 }, ch.at)
         .fromTo(inner,
-          { z: -320, rotateY: dir * 28, xPercent: dir * 12 },
+          { z: calm ? 0 : -320, rotateY: dir * 28, xPercent: dir * 12 },
           { z: 0, rotateY: dir * 8, xPercent: 0, duration: 0.7, ease: 'power3.out' }, ch.at)
         .from(rows, { y: 16, autoAlpha: 0, duration: 0.4, stagger: 0.07, ease: 'power2.out' }, ch.at + 0.1)
         .to(line, { p: 1, duration: 0.6, ease: 'power2.inOut' }, ch.at + 0.15);
@@ -398,7 +379,7 @@ function initExperience() {
 
       // Saída: o cartão passa pela câmera.
       tl.to(line, { p: 0, duration: 0.3, ease: 'power2.in' }, ch.until - 0.45)
-        .to(inner, { z: 160, rotateY: dir * -4, autoAlpha: 0, duration: 0.45, ease: 'power2.in' }, ch.until - 0.4)
+        .to(inner, { z: calm ? 0 : 160, rotateY: dir * -4, autoAlpha: 0, duration: 0.45, ease: 'power2.in' }, ch.until - 0.4)
         .set(el, { autoAlpha: 0 }, ch.until);
     });
 
@@ -427,8 +408,6 @@ function initExperience() {
   return () => cleanups.forEach((fn) => fn());
 }
 
-let destroy = () => {};
-if (reduceMotion) initStatic();
-else destroy = initExperience();
+const destroy = initExperience();
 
 if (import.meta.hot) import.meta.hot.dispose(() => destroy());
