@@ -125,6 +125,7 @@ export const OUTRO_AT = 13.3;
  *   0–1,6 s descarrega no caminhão · 1,6–3,0 gira até a frente · 3,0–4,4 escava
  *   4,5–5,8 enche e ergue a caçamba · 5,9–7,3 gira carregada · 7,4–9,0 descarrega
  * Mesma copy do desktop, reordenada para acompanhar a ação deste vídeo.
+ * Máquina confirmada pela BMC como HX220 (09/10); cenário diferente do desktop aprovado.
  * ------------------------------------------------------------------ */
 const MOBILE_TIMING = [
   ['economia', 1.7, 2.95],
