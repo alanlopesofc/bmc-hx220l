@@ -10,7 +10,7 @@ npm run build    # dist/ estático (pode ir para qualquer host ou ser embutido n
 
 ## Arquitetura
 - `src/story.js` — mapa de eventos do vídeo (cortes medidos com ffmpeg `scdet`), capítulos, dados técnicos e âncoras na máquina.
-- `src/frames.js` — sequência WebP com carregamento progressivo (passes 1/16 → 1/1). Telas em pé usam `frames/v` (720×1280, extraídos do vídeo vertical `media-src/hx220l-vertical-1080x1920.mp4`, recortado na máquina em cada plano); celular deitado e saveData carregam metade dos frames.
+- `src/frames.js` — sequência WebP com carregamento progressivo (passes 1/16 → 1/1). Telas em pé usam outro roteiro (`MOBILE` em `story.js`): vídeo vertical próprio `media-src/hx220l-mobile-720x1280.mp4` (tomada contínua de um ciclo de carga), em `frames/m` (640×1138, 12 fps, 120 quadros, ≈8,7 MB), com os capítulos reposicionados nas ações dele. `media-src/hx220l-vertical-1080x1920.mp4` é o recorte 9:16 do vídeo do desktop, guardado como alternativa; celular deitado e saveData carregam metade dos frames.
 - `src/renderer.js` — Three.js (chunk carregado depois do pôster): cover com foco por plano, push-in, parallax do cursor, aberração cromática nos cortes, grão, vinheta e fusão para o azul da marca. Fallback Canvas 2D sem WebGL.
 - `src/main.js` — Lenis + ScrollTrigger (pin + scrub), timeline única em segundos de vídeo, cartões 3D com contagem, linhas de conexão, trilho de capítulos clicável, `gsap.matchMedia` por breakpoint, com `prefers-reduced-motion` o vídeo continua no scroll e só os efeitos extras saem.
 

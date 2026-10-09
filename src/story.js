@@ -118,8 +118,54 @@ export const CHAPTERS = [
 
 export const OUTRO_AT = 13.3;
 
-export function shotAt(time) {
-  for (let i = SHOTS.length - 1; i >= 0; i--) if (time >= SHOTS[i].start) return i;
+/* ------------------------------------------------------------------ *
+ * Celular em pé: vídeo próprio, já vertical (omni-v1 · 720×1280 · 24 fps · 10 s,
+ * em media-src/hx220l-mobile-720x1280.mp4). Tomada contínua, sem cortes, de um
+ * ciclo completo de carga. Eventos medidos numa contact sheet a 4 fps:
+ *   0–1,6 s descarrega no caminhão · 1,6–3,0 gira até a frente · 3,0–4,4 escava
+ *   4,5–5,8 enche e ergue a caçamba · 5,9–7,3 gira carregada · 7,4–9,0 descarrega
+ * Mesma copy do desktop, reordenada para acompanhar a ação deste vídeo.
+ * ------------------------------------------------------------------ */
+const MOBILE_TIMING = [
+  ['economia', 1.7, 2.95],
+  ['potencia', 3.05, 4.4],
+  ['carga', 4.5, 5.8],
+  ['durabilidade', 5.9, 7.3],
+  ['descarga', 7.4, 8.9],
+  ['operacao', 9.0, 9.95],
+];
+
+const MOBILE = {
+  key: 'mobile',
+  frames: 'frames/m/',
+  video: { duration: 10, fps: 12, frames: 120, width: 640, height: 1138 },
+  shots: [{ start: 0, end: 10.01, focus: 0.5, name: 'Ciclo de carga contínuo' }],
+  chapters: MOBILE_TIMING.map(([id, at, until]) => ({
+    ...CHAPTERS.find((c) => c.id === id), at, until, anchor: null,
+  })),
+  outroAt: 10,
+  endHold: 2.6,
+  scroll: 0.62, // telas de rolagem por segundo de timeline
+};
+
+const DESKTOP = {
+  key: 'desktop',
+  frames: 'frames/d/',
+  video: VIDEO,
+  shots: SHOTS,
+  chapters: CHAPTERS,
+  outroAt: OUTRO_AT,
+  endHold: 2.2,
+  scroll: 0.46,
+};
+
+/** Roteiro escolhido no carregamento: tela em pé usa o vídeo vertical. */
+export function pickStory() {
+  return window.innerWidth / window.innerHeight < 0.9 ? MOBILE : DESKTOP;
+}
+
+export function shotAt(shots, time) {
+  for (let i = shots.length - 1; i >= 0; i--) if (time >= shots[i].start) return i;
   return 0;
 }
 

@@ -4,7 +4,7 @@ import './style.css';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import Lenis from 'lenis';
-import { VIDEO, SHOTS, CHAPTERS, OUTRO_AT, shotAt, formatNumber, projectAnchor } from './story.js';
+import { pickStory, shotAt, formatNumber, projectAnchor } from './story.js';
 import { FrameStore } from './frames.js';
 
 gsap.registerPlugin(ScrollTrigger);
@@ -13,8 +13,13 @@ ScrollTrigger.config({ ignoreMobileResize: true });
 
 const $ = (s, r = document) => r.querySelector(s);
 const NAVY_DEEP = '#0b1640'; // #14298D escurecido: base do fechamento e da seção seguinte
-const END_HOLD = 2.2; // segundos de timeline após o fim do vídeo (fechamento + liberação do pin)
+// Roteiro fixo por carregamento: desktop (vídeo horizontal com cortes) ou celular em pé
+// (vídeo vertical contínuo). Girar o aparelho mantém o roteiro; o "cover" se ajusta.
+const story = pickStory();
+const { video: VIDEO, shots: SHOTS, chapters: CHAPTERS, outroAt: OUTRO_AT } = story;
+const END_HOLD = story.endHold; // segundos de timeline após o fim do vídeo (fechamento + liberação do pin)
 const TOTAL = VIDEO.duration + END_HOLD;
+document.querySelector('[data-hero]').dataset.story = story.key;
 
 // Com "Reduzir movimento" (ou Modo de Pouca Energia no iPhone) o vídeo continua
 // seguindo o scroll, porque é o próprio usuário que o move. Só saem os efeitos extras:
@@ -23,11 +28,6 @@ const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const saveData = navigator.connection?.saveData === true;
 const lightweight = window.matchMedia('(max-width: 767px)').matches || saveData;
 
-// Dois conjuntos de frames:
-//   d — 1344×756, telas na horizontal (celular deitado carrega 1 a cada 2);
-//   v — 720×1280, extraído do vídeo vertical 1080×1920 (media-src/), recortado na máquina em cada plano.
-const FRAME_SETS = { d: 'frames/d/', v: 'frames/v/' };
-const pickFrameSet = () => (window.innerWidth / window.innerHeight < 0.9 ? 'v' : 'd');
 
 const hero = $('[data-hero]');
 const els = {
@@ -50,7 +50,6 @@ const els = {
   header: $('[data-header]'),
 };
 
-const frameUrl = (set, i) => `frames/${set}/f${String(i + 1).padStart(3, '0')}.webp`;
 const frameAt = (t) => Math.min(VIDEO.frames - 1, Math.max(0, Math.round(t * VIDEO.fps)));
 
 /* ---------------------------------------------------------------- *
@@ -101,31 +100,18 @@ function initExperience() {
   gsap.ticker.lagSmoothing(0);
   cleanups.push(() => { gsap.ticker.remove(lenisRaf); lenis.destroy(); });
 
-  // Frames: o conjunto acompanha a orientação da tela (troca ao girar o aparelho).
-  let frameSet = pickFrameSet();
-  const makeStore = (set) => new FrameStore({
+  // Frames do roteiro escolhido. Celular deitado no roteiro desktop carrega 1 a cada 2.
+  const store = new FrameStore({
     count: VIDEO.frames,
-    path: FRAME_SETS[set],
-    step: saveData || (lightweight && set === 'd') ? 2 : 1,
+    path: story.frames,
+    step: saveData || (lightweight && story.key === 'desktop') ? 2 : 1,
     concurrency: lightweight ? 4 : 6,
-    maxDecoded: lightweight ? 20 : 90, // 720×1280 decodificado ≈ 3,7 MB: 20 cabem com folga no iPhone
+    maxDecoded: lightweight ? 20 : 90, // 640×1138 decodificado ≈ 2,9 MB: 20 cabem com folga no iPhone
     onProgress: (p) => {
       gsap.set(els.loaderBar, { scaleX: p });
       if (p >= 1) gsap.to(els.loader, { autoAlpha: 0, duration: 0.6, delay: 0.2 });
     },
   });
-  let store = makeStore(frameSet);
-  const switchFrameSet = () => {
-    const next = pickFrameSet();
-    if (next === frameSet) return;
-    frameSet = next;
-    const old = store;
-    store = makeStore(next);
-    gsap.set(els.loader, { autoAlpha: 1 });
-    gsap.set(els.loaderBar, { scaleX: 0 });
-    // Mantém o conjunto anterior na tela até o novo ter o primeiro quadro.
-    store.start().then(() => { old.destroy(); draw.dirty = true; });
-  };
   cleanups.push(() => store.destroy());
 
   // Three.js em chunk separado: pôster e título aparecem antes do WebGL.
@@ -192,7 +178,6 @@ function initExperience() {
     view.dpr = Math.min(window.devicePixelRatio || 1, lightweight ? 1.5 : 2);
     view.desktop = window.matchMedia('(min-width: 1024px)').matches;
     renderer?.resize(view.w, view.h, view.dpr);
-    switchFrameSet();
     els.lines.setAttribute('viewBox', `0 0 ${view.w} ${view.h}`);
     draw.dirty = true;
   };
@@ -226,7 +211,7 @@ function initExperience() {
     const moving = Math.abs(pointer.sx - psx) + Math.abs(pointer.sy - psy) > 0.0004;
 
     const t = state.time;
-    const si = shotAt(t);
+    const si = shotAt(SHOTS, t);
     const shot = SHOTS[si];
     if (si !== draw.shot) {
       if (draw.shot !== -1 && !calm) draw.cut = 1;
@@ -234,7 +219,8 @@ function initExperience() {
     }
     // Crossfade entre quadros vizinhos do mesmo plano: 15 fps passam a fluir
     // como movimento contínuo, sem degraus. Nunca mistura através de um corte.
-    const lo = frameAt(shot.start), hi = frameAt(shot.end) - 1;
+    const lo = frameAt(shot.start);
+    const hi = si === SHOTS.length - 1 ? VIDEO.frames - 1 : frameAt(shot.end) - 1;
     const exact = Math.min(hi, Math.max(lo, t * VIDEO.fps));
     const frame = Math.floor(exact);
     const img = store.get(frame, lo, hi) ?? draw.img;
@@ -335,7 +321,7 @@ function initExperience() {
       scrollTrigger: {
         trigger: hero,
         start: 'top top',
-        end: () => `+=${window.innerHeight * TOTAL * (desktop ? 0.46 : 0.36)}`,
+        end: () => `+=${window.innerHeight * TOTAL * (story.key === 'mobile' ? story.scroll : desktop ? 0.46 : 0.36)}`,
         pin: els.stage,
         scrub: desktop ? true : 0.35,
         anticipatePin: 1,

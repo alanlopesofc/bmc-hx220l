@@ -343,3 +343,20 @@ p { margin: 0; }
   .stat + .stat { border-left: 0; border-top: 1px solid rgba(255, 255, 255, 0.16); }
   .ficha__grid, .ficha__tech ul, .lineup__grid { grid-template-columns: 1fr; }
 }
+
+/* Roteiro do celular (vídeo vertical): a máquina ocupa o meio e a base do quadro
+   e o céu fica livre em cima. Cartões compactos no topo, sem cobrir a escavadeira. */
+.hero[data-story="mobile"] .spec,
+.hero[data-story="mobile"] .spec--left,
+.hero[data-story="mobile"] .spec--right {
+  top: calc(64px + env(safe-area-inset-top, 0px)); bottom: auto;
+  left: var(--gutter); right: var(--gutter); width: auto;
+}
+.hero[data-story="mobile"] .spec__inner { padding: 14px 16px 16px; background: rgba(11, 22, 64, 0.72); }
+.hero[data-story="mobile"] .spec__index { margin-bottom: 6px; }
+.hero[data-story="mobile"] .spec__title { font-size: 19px; }
+.hero[data-story="mobile"] .spec__bullets { margin-top: 8px; }
+.hero[data-story="mobile"] .spec__bullets li { font-size: 13.5px; }
+.hero[data-story="mobile"] .spec__bullets li:nth-child(n+2) { display: none; }
+.hero[data-story="mobile"] .spec__proof { margin-top: 10px; padding-top: 8px; }
+.hero[data-story="mobile"] .spec__value { font-size: 26px; }
