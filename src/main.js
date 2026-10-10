@@ -50,6 +50,9 @@ const els = {
   header: $('[data-header]'),
 };
 
+// Desfoque como sinal de foco (entra nítido, sai desfocando). Nunca com movimento reduzido.
+const blur = (px) => (calm ? 'none' : `blur(${px}px)`);
+
 const frameAt = (t) => Math.min(VIDEO.frames - 1, Math.max(0, Math.round(t * VIDEO.fps)));
 
 /* ---------------------------------------------------------------- *
@@ -167,7 +170,7 @@ function initExperience() {
   const rail = buildRail((t) => {
     if (!st) return;
     const y = st.start + (t / TOTAL) * (st.end - st.start);
-    lenis.scrollTo(y, { duration: 1.4 });
+    lenis.scrollTo(y, { duration: calm ? 0.6 : 1.2 });
   });
 
   // Tamanho
@@ -203,11 +206,14 @@ function initExperience() {
 
   /* ---------------- loop de render (um por tick do GSAP) ---------------- */
   const renderState = { focus: 0.5, zoom: 1.05, cut: 0, time: 0, fade: 0, px: 0, py: 0 };
-  const tick = (time) => {
-    // Suaviza o cursor
+  const tick = (time, deltaMs = 16.7) => {
+    // Amortecimentos normalizados para 60 Hz: em telas de 120 Hz o cursor e o flash
+    // do corte mantêm o mesmo tempo, em vez de correr duas vezes mais rápido.
+    const k = Math.min(deltaMs, 50) / (1000 / 60);
     const psx = pointer.sx, psy = pointer.sy;
-    pointer.sx += (pointer.x - pointer.sx) * 0.06;
-    pointer.sy += (pointer.y - pointer.sy) * 0.06;
+    const follow = 1 - Math.pow(1 - 0.06, k);
+    pointer.sx += (pointer.x - pointer.sx) * follow;
+    pointer.sy += (pointer.y - pointer.sy) * follow;
     const moving = Math.abs(pointer.sx - psx) + Math.abs(pointer.sy - psy) > 0.0004;
 
     const t = state.time;
@@ -249,7 +255,7 @@ function initExperience() {
       draw.img = img;
       draw.dirty = false;
     }
-    draw.cut *= 0.86;
+    draw.cut *= Math.pow(0.86, k);
     if (draw.cut < 0.01) draw.cut = 0;
 
     // Primeiro as leituras de layout (linhas), depois as escritas: evita layout forçado.
@@ -279,6 +285,8 @@ function initExperience() {
       c.path.style.strokeDashoffset = String(1 - c.line.p);
       c.dot.setAttribute('cx', a.x); c.dot.setAttribute('cy', a.y);
       c.ring.setAttribute('cx', a.x); c.ring.setAttribute('cy', a.y);
+      // O anel abre uma vez, junto com a linha, e fica parado marcando o ponto.
+      c.ring.setAttribute('r', String(6 + 8 * c.line.p));
       c.g.style.opacity = String(Math.min(1, c.line.p * 1.5));
     }
   };
@@ -302,15 +310,20 @@ function initExperience() {
   cleanups.push(() => gsap.ticker.remove(tick));
 
   /* ---------------- entrada (Fase 01: impacto) ---------------- */
+  // Um único gesto de impacto (o nome sobe da máscara); o resto só acompanha.
   const intro = gsap.timeline({ defaults: { ease: 'expo.out' }, paused: true });
+  if (!calm) intro.from(els.media, { scale: 1.04, duration: 2, ease: 'power2.out' }, 0);
   intro
-    .from(els.media, { scale: 1.08, duration: 2.4, ease: 'power2.out' }, 0)
-    .from(els.titleWord, { yPercent: 108, duration: 1.4 }, 0.25)
-    .from(els.titleLines, { y: 24, autoAlpha: 0, duration: 1.1, stagger: 0.12 }, 0.55)
-    .from(els.header, { y: -30, autoAlpha: 0, duration: 1 }, 0.7)
-    .from(els.hint, { autoAlpha: 0, duration: 1 }, 1.1);
+    .from(els.titleWord, { yPercent: calm ? 0 : 108, autoAlpha: calm ? 0 : 1, duration: calm ? 0.6 : 1.2 }, 0.2)
+    .from(els.titleLines, { y: calm ? 0 : 12, autoAlpha: 0, duration: 0.8, stagger: 0.08, ease: 'power3.out' }, 0.5)
+    .from(els.header, { autoAlpha: 0, duration: 0.6, ease: 'power2.out' }, 0.6)
+    .from(els.hint, { autoAlpha: 0, duration: 0.6, ease: 'power2.out' }, 1);
 
-  store.start().then(() => { draw.dirty = true; intro.play(); });
+  // O título não espera o primeiro quadro além de 1,2 s (rede lenta).
+  const playIntro = () => { if (!intro.isActive() && intro.progress() === 0) intro.play(); };
+  const introFallback = setTimeout(playIntro, 1200);
+  cleanups.push(() => clearTimeout(introFallback));
+  store.start().then(() => { draw.dirty = true; playIntro(); });
 
   /* ---------------- timeline do scroll (Fases 02–05) ---------------- */
   const mm = gsap.matchMedia();
@@ -338,20 +351,23 @@ function initExperience() {
     tl.fromTo(els.rail, { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.5 }, 1.4)
       .to(els.rail, { autoAlpha: 0, duration: 0.4 }, OUTRO_AT - 0.3);
     tl.to(els.hint, { autoAlpha: 0, y: 10, duration: 0.4 }, 0)
-      .to(els.title, { autoAlpha: 0, z: -220, yPercent: -18, duration: 1.5, ease: 'power2.in' }, 0.25)
-      .to(els.titleWord, { scaleX: 1.06, transformOrigin: '0% 100%', duration: 1.5, ease: 'power1.in' }, 0.25);
+      .fromTo(els.title, { filter: blur(0) }, {
+        autoAlpha: 0, z: calm ? 0 : -140, yPercent: calm ? 0 : -8,
+        filter: blur(6), duration: 1.3, ease: 'power2.in', immediateRender: false,
+      }, 0.25);
 
     // Fases 03/04: cada dado entra no momento do vídeo que o demonstra.
     cards.forEach(({ ch, el, nums, line }) => {
       const dir = calm ? 0 : ch.side === 'right' ? 1 : -1;
       const inner = el.querySelector('.spec__inner');
-      const rows = inner.querySelectorAll('.spec__index, .spec__title, li, .spec__proof');
-      tl.fromTo(el, { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.15 }, ch.at)
+      const proofRow = inner.querySelector('.spec__proof');
+      tl.fromTo(el, { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.01 }, ch.at)
         .fromTo(inner,
-          { z: calm ? 0 : -320, rotateY: dir * 28, xPercent: dir * 12 },
-          { z: 0, rotateY: dir * 8, xPercent: 0, duration: 0.7, ease: 'power3.out' }, ch.at)
-        .from(rows, { y: 16, autoAlpha: 0, duration: 0.4, stagger: 0.07, ease: 'power2.out' }, ch.at + 0.1)
+          { autoAlpha: 0, z: calm ? 0 : -120, rotateY: dir * 14, xPercent: dir * 4, filter: blur(8) },
+          { autoAlpha: 1, z: 0, rotateY: dir * 6, xPercent: 0, filter: blur(0), duration: 0.6, ease: 'power3.out' }, ch.at)
         .to(line, { p: 1, duration: 0.6, ease: 'power2.inOut' }, ch.at + 0.15);
+      // fromTo explícito: o cartão começa oculto, e um from() leria esse estado como destino.
+      if (proofRow) tl.fromTo(proofRow, { y: calm ? 0 : 8, autoAlpha: 0 }, { y: 0, autoAlpha: 1, duration: 0.35, ease: 'power2.out' }, ch.at + 0.2);
 
       // Contagem precisa até o valor oficial
       const targets = ch.proof ? ch.proof.range ?? [ch.proof.value] : [];
@@ -365,16 +381,16 @@ function initExperience() {
 
       // Saída: o cartão passa pela câmera.
       tl.to(line, { p: 0, duration: 0.3, ease: 'power2.in' }, ch.until - 0.45)
-        .to(inner, { z: calm ? 0 : 160, rotateY: dir * -4, autoAlpha: 0, duration: 0.45, ease: 'power2.in' }, ch.until - 0.4)
+        .to(inner, { z: calm ? 0 : 40, yPercent: calm ? 0 : -3, autoAlpha: 0, filter: blur(4), duration: 0.35, ease: 'power2.in' }, ch.until - 0.35)
         .set(el, { autoAlpha: 0 }, ch.until);
     });
 
     // Fase 05: escala da operação, fechamento e transição.
     const outroRows = els.outro.children;
     tl.fromTo(els.outro, { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.2 }, OUTRO_AT)
-      .from(outroRows, { y: 40, autoAlpha: 0, duration: 0.8, stagger: 0.15, ease: 'power3.out' }, OUTRO_AT)
+      .from(outroRows, { y: calm ? 0 : 20, autoAlpha: 0, duration: 0.7, stagger: 0.1, ease: 'power3.out' }, OUTRO_AT)
       .to(state, { fade: 0.62, duration: END_HOLD, ease: 'power1.inOut' }, VIDEO.duration - 0.6)
-      .to(els.media, { scale: desktop ? 0.9 : 0.94, borderRadius: 28, duration: END_HOLD, ease: 'power2.inOut' }, VIDEO.duration);
+      .to(els.media, { scale: calm ? 1 : desktop ? 0.92 : 0.95, borderRadius: 24, duration: END_HOLD, ease: 'power2.inOut' }, VIDEO.duration);
 
     return () => { st = null; };
   });

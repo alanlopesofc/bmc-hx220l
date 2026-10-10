@@ -12,7 +12,8 @@
   --font-body: 'Inter', 'Helvetica Neue', Arial, sans-serif;
 
   --gutter: clamp(16px, 4.5vw, 72px);
-  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);   /* chegadas */
+  --ease-soft: cubic-bezier(0.23, 1, 0.32, 1);  /* trocas de estado curtas (hover, cor) */
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -50,10 +51,11 @@ p { margin: 0; }
   min-height: 48px; padding: 0 24px; border-radius: 6px;
   font-family: var(--font-display); font-weight: 700; font-size: 15px;
   text-decoration: none; white-space: nowrap;
-  transition: background-color 0.25s, color 0.25s, border-color 0.25s, transform 0.25s var(--ease-out);
+  transition: background-color 0.2s var(--ease-soft), color 0.2s var(--ease-soft),
+    border-color 0.2s var(--ease-soft), transform 0.16s var(--ease-soft);
 }
-.btn:hover { transform: translateY(-2px); }
-.btn:active { transform: translateY(0); }
+/* Resposta ao toque: o botão cede um pouco ao ser pressionado, em vez de pular no hover. */
+.btn:active { transform: scale(0.97); }
 .btn--primary { background: var(--blue); color: var(--white); }
 .btn--primary:hover { background: var(--blue-light); }
 .btn--ghost { border: 1px solid rgba(255, 255, 255, 0.45); color: var(--white); }
@@ -65,14 +67,15 @@ p { margin: 0; }
   position: fixed; inset: 0 0 auto; z-index: 50;
   display: flex; align-items: center; justify-content: space-between; gap: 24px;
   padding: calc(18px + env(safe-area-inset-top, 0px)) var(--gutter) 18px;
-  transition: background-color 0.4s, backdrop-filter 0.4s, padding 0.4s;
+  transition: background-color 0.35s var(--ease-soft);
 }
-.site-header.is-solid { background: rgba(11, 22, 64, 0.88); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); padding-block: 12px; }
+/* Só o fundo muda: animar padding refazia o layout do cabeçalho a cada quadro. */
+.site-header.is-solid { background: rgba(11, 22, 64, 0.88); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
 .site-header__brand img { height: 22px; width: auto; filter: brightness(0) invert(1); }
 .site-header__nav { display: flex; align-items: center; gap: clamp(16px, 2.4vw, 32px); }
 .site-header__nav a:not(.btn) {
   font-family: var(--font-display); font-weight: 600; font-size: 14px; text-decoration: none;
-  color: rgba(255, 255, 255, 0.82); transition: color 0.2s;
+  color: rgba(255, 255, 255, 0.82); transition: color 0.2s var(--ease-soft);
 }
 .site-header__nav a:not(.btn):hover { color: var(--white); }
 
@@ -88,7 +91,7 @@ p { margin: 0; }
   transform-origin: 50% 45%; will-change: transform;
 }
 .hero__canvas, .hero__poster { position: absolute; inset: 0; width: 100%; height: 100%; }
-.hero__poster { object-fit: cover; object-position: 47% 50%; transition: opacity 0.4s; }
+.hero__poster { object-fit: cover; object-position: 47% 50%; transition: opacity 0.4s var(--ease-soft); }
 .hero__poster.is-hidden { opacity: 0; }
 .hero__scrim {
   position: absolute; inset: 0; pointer-events: none;
@@ -184,10 +187,9 @@ p { margin: 0; }
 .line__dot { fill: var(--white); }
 .line__ring {
   fill: none; stroke: var(--blue-light); stroke-width: 1.5;
-  transform-box: fill-box; transform-origin: center;
-  animation: ring 2.2s var(--ease-out) infinite;
+  opacity: 0.7;
+  /* Sem pulso em loop: o raio acompanha o desenho da linha (main.js) e para. */
 }
-@keyframes ring { from { transform: scale(0.4); opacity: 1; } to { transform: scale(1.6); opacity: 0; } }
 
 /* Fechamento */
 .hero__outro {
@@ -207,12 +209,12 @@ p { margin: 0; }
 .hero__rail ol { list-style: none; margin: 0; padding: 0; display: flex; gap: clamp(14px, 1.8vw, 26px); }
 .hero__rail button {
   display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 0; border: 0; background: none; cursor: pointer;
-  font-family: var(--font-display); color: rgba(255, 255, 255, 0.45); transition: color 0.3s;
+  font-family: var(--font-display); color: rgba(255, 255, 255, 0.45); transition: color 0.2s var(--ease-soft);
 }
 .hero__rail-n { font-weight: 700; font-size: 12px; font-variant-numeric: tabular-nums; }
 .hero__rail-label {
   font-weight: 600; font-size: 13px; max-width: 0; overflow: hidden; white-space: nowrap; opacity: 0;
-  transition: max-width 0.5s var(--ease-out), opacity 0.35s;
+  transition: max-width 0.4s var(--ease-out), opacity 0.25s var(--ease-soft) 0.05s;
 }
 .hero__rail button:hover, .hero__rail button.is-past { color: rgba(255, 255, 255, 0.75); }
 .hero__rail button.is-active { color: var(--white); }
@@ -228,7 +230,9 @@ p { margin: 0; }
 .hero__hint-line { position: relative; width: 1px; height: 40px; background: rgba(255, 255, 255, 0.25); overflow: hidden; }
 .hero__hint-line::after {
   content: ''; position: absolute; inset: 0; background: var(--white);
-  animation: hint 1.8s var(--ease-out) infinite;
+  /* Indica a direção poucas vezes e para: o convite não vira ruído. */
+  animation: hint 1.8s var(--ease-out) 1.4s 3 backwards;
+  transform: translateY(100%);
 }
 @keyframes hint { from { transform: translateY(-100%); } to { transform: translateY(100%); } }
 
@@ -277,9 +281,15 @@ p { margin: 0; }
 .model-card {
   display: grid; gap: 6px; padding: 20px 20px 24px; background: var(--white); border-radius: 6px;
   text-decoration: none; border: 1px solid rgba(20, 41, 141, 0.1);
-  transition: transform 0.35s var(--ease-out), box-shadow 0.35s, border-color 0.35s;
+  transition: transform 0.3s var(--ease-soft), box-shadow 0.3s var(--ease-soft), border-color 0.3s var(--ease-soft);
 }
-.model-card:hover { transform: translateY(-4px); box-shadow: 0 18px 40px -20px rgba(20, 41, 141, 0.35); border-color: rgba(5, 126, 236, 0.4); }
+.model-card img { transition: transform 0.5s var(--ease-out); }
+@media (hover: hover) {
+  /* Elevação leve só com mouse; a imagem da máquina se aproxima um pouco. */
+  .model-card:hover { transform: translateY(-3px); box-shadow: 0 18px 40px -20px rgba(20, 41, 141, 0.35); border-color: rgba(5, 126, 236, 0.4); }
+  .model-card:hover img { transform: scale(1.03); }
+}
+.model-card:active { transform: scale(0.99); }
 .model-card--current { border: 2px solid var(--blue); }
 .model-card img { aspect-ratio: 3 / 2; object-fit: contain; width: 100%; margin-bottom: 8px; }
 .model-card h3 { font-weight: 800; font-size: 22px; }
@@ -360,3 +370,15 @@ p { margin: 0; }
 .hero[data-story="mobile"] .spec__bullets li:nth-child(n+2) { display: none; }
 .hero[data-story="mobile"] .spec__proof { margin-top: 10px; padding-top: 8px; }
 .hero[data-story="mobile"] .spec__value { font-size: 26px; }
+
+/* ---------------- Movimento reduzido ----------------
+   O vídeo continua seguindo o scroll (main.js); aqui saem as animações próprias do CSS. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .hero__hint-line::after { animation: none; transform: none; }
+  .btn:active, .model-card:active { transform: none; }
+}
